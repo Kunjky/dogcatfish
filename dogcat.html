@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Phaser - Making your first game, part 2</title>
+    <script type="text/javascript" src="js/phaser.js"></script>
+    <style type="text/css">
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <script type="text/javascript">
+
+        var game = new Phaser.Game(600, 600, Phaser.AUTO, '', { preload: preload, create: create, update: update, render: render });
+
+        var cat;
+        var dogGroup;
+        var dogList = [];
+        var fish;
+        var moving = false;
+        var distance;
+        var isAlive;
+        var score;
+        var scoreText;
+        var gameoverText;
+        var catTween;
+        function preload() {
+
+            game.load.image('fish', 'assets/fish.png');
+            game.load.image('dog', 'assets/dog.png');
+            game.load.image('cat', 'assets/cat.png');
+
+        }
+
+        function create() {
+            game.stage.backgroundColor = "#f3f3f3";
+            game.physics.startSystem(Phaser.Physics.ARCADE);
+            //text score
+            scoreText = game.add.text(game.width / 2, 20, '0', {
+                font: "30px Arial",
+                fill: "#ff0044",
+                align: "center"
+            });
+            gameoverText = game.add.text(game.width / 2, game.height / 2 - 50, '', {
+                font: "36px Arial",
+                fill: "#ff0044",
+                align: "center"
+            });
+            gameoverText.anchor.setTo(0.5, 0.5);
+
+
+            //init object
+            initGame();
+        }
+
+        function update() {
+            if (!isAlive) {
+                //if click restart game
+                if (game.input.mousePointer.isDown) {
+                    restart();
+                }
+                return;
+            }
+            //check collide
+            game.physics.arcade.collide(dogGroup, dogGroup);
+            game.physics.arcade.overlap(cat, dogGroup, hit, null, this);
+            game.physics.arcade.overlap(cat, fish, addScore, null, this);
+            //loop
+            catUpdate();
+            dogUpdate();
+
+        }
+
+        function render() {
+
+            // game.debug.bodyInfo(cat, 32, 32);
+
+            game.debug.body(cat);
+            game.debug.body(fish);
+            for (var i = 0; i < dogList.length; i++) {
+                game.debug.body(dogList[i]);
+            }
+
+        }
+
+        function initGame() {
+            isAlive = true;
+            score = 0;
+            scoreText.text = '0';
+            gameoverText.text = '';
+            //create cat
+            cat = game.add.sprite(32, game.height / 2, 'cat');
+            cat.anchor.set(0.5);
+            game.physics.arcade.enable(cat);
+            cat.angle = -25;
+            catTween = game.add.tween(cat).to({
+                angle: 25
+            }, 200, Phaser.Easing.Linear.None, true, 0, -1, true);
+            catTween.pause();
+            //create dogs
+            dogGroup = game.add.group();
+            dogGroup.enableBody = true;
+            var dog = dogGroup.create(450, game.height / 2, 'dog');
+            dog.anchor.set(0.5);
+            dogList.push(dog);
+            direction = findTarget(dog);
+            dog.body.velocity.setTo(direction.x * 200, direction.y * 200);
+            dog.angle = -25;
+            game.add.tween(dog).to({
+                angle: 25
+            }, 200, Phaser.Easing.Linear.None, true, 0, -1, true);
+            //create fish
+            fish = game.add.sprite(game.width / 2, game.height / 2, 'fish');
+            fish.anchor.set(0.5);
+            game.physics.arcade.enable(fish);
+
+
+            // armTween.pause();
+            // armTween.resume();
+        }
+
+        function hit() {
+            console.log("game over");
+            isAlive = false;
+            cat.body.velocity.setTo(0, 0);
+            for (var i = 0; i < dogList.length; i++) {
+                dogList[i].body.velocity.setTo(0, 0);
+            }
+            gameoverText.text = "GAME OVER\nclick to play again!";
+        }
+
+        function addScore() {
+            console.log("add score");
+            scoreText.text = ++score;
+            fish.x = Math.floor(Math.random() * (game.width - 100) + 50);
+            fish.y = Math.floor(Math.random() * (game.height - 100) + 50);
+            game.add.tween(fish.scale).from({
+                x: 0, y: 0
+            }, 300, Phaser.Easing.Linear.None, true, 0, 0, false);
+            if (Math.log2(score) > dogList.length + 1 && dogList.length < 10) {
+                var x = Math.floor(Math.random() * (game.width - 100) + 50);
+                var y = Math.floor(Math.random() * (game.height - 100) + 50);
+                var dog = dogGroup.create(x, y, 'dog');
+                dog.anchor.set(0.5);
+                dogList.push(dog);
+                dog.body.enable = false;
+                game.add.tween(dog.scale).from({
+                x: 0, y: 0
+                }, 400, Phaser.Easing.Linear.None, true, 0, 0, false);
+
+                game.time.events.add(Phaser.Timer.SECOND * 2, function () {
+                    var dog = dogList[dogList.length - 1];
+                    dog.body.enable = true;
+                    direction = findTarget(dog);
+                    dog.body.velocity.setTo(direction.x * 200, direction.y * 200);
+                    dog.angle = -25;
+                    game.add.tween(dog).to({
+                        angle: 25
+                    }, 200, Phaser.Easing.Linear.None, true, 0, -1, true);
+                }, this);
+            }
+        }
+
+        function restart() {
+            //delete all
+            cat.kill();
+            fish.kill();
+            dogGroup.callAll('kill');
+            dogList = [];
+            initGame();
+        }
+
+        function catUpdate() {
+            if (game.input.mousePointer.isDown) {
+                var armTween;
+                if (!moving) {
+                    moving = true;
+                    var des = new Phaser.Point(game.input.x, game.input.y);
+                    distance = des.distance(cat);
+                    game.physics.arcade.moveToPointer(cat, 400);
+                    cat.angle = 25;
+                    catTween.resume();
+
+                }
+            }
+
+            if (moving) {
+                distance = distance - 400 * game.time.elapsed / 1000;
+                if (distance < 0) {
+                    moving = false;
+                    cat.body.velocity.setTo(0, 0);
+                }
+            } else {
+                cat.angle = 0;
+                catTween.pause();
+            }
+
+            if (cat.body.velocity.x > 0)
+                cat.scale.x = -1;
+            else if(cat.body.velocity.x < 0)
+                cat.scale.x = 1;
+        }
+
+        function dogUpdate() {
+            for (var i = 0; i < dogList.length; i++) {
+                var dog = dogList[i];
+                var w = dog.width / 2;
+                var h = dog.height / 2;
+                if (dog.x < 0 + w || dog.x > game.width - w || dog.y < 0 + h || dog.y > game.height - h) {
+                    var direction = findTarget(dog);
+                    var speed = Math.floor(Math.random() * (250 - 200) + 200);
+                    dog.body.velocity.setTo(direction.x * speed, direction.y * speed);
+                }
+                if (dog.body.velocity.x > 0)
+                    dog.scale.x = -1;
+                else
+                    dog.scale.x = 1;
+            }
+        }
+
+        function findTarget(dog) {
+            var x = cat.x - dog.x;
+            var y = cat.y - dog.y;
+            var direction = new Phaser.Point(x, y);
+            direction = direction.normalize();
+            return direction;
+        }
+    </script>
+
+</body>
+
+</html>
